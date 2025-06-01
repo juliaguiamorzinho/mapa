@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Bahia destacada com GeoJSON</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; }
+    header img { width: 100%; height: auto; display: block; }
+    #map { height: 600px; width: 100%; }
+
+    .label-bahia {
+      font-size: 20px;
+      font-weight: bold;
+      background-color: rgba(255,255,255,0.7);
+      padding: 4px 8px;
+      border-radius: 4px;
+      color: #000;
+      border: 1px solid #ccc;
+    }
+
+    .municipio-label {
+      font-size: 9px;
+      color: #333;
+      font-weight: bold;
+      text-shadow: 1px 1px 2px white;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="header.jpg" alt="Cabeçalho da página">
+  </header>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map', {
+      minZoom: 6,
+      maxZoom: 10,
+      maxBounds: [[-18.5, -46.5], [-7, -35]],
+      maxBoundsViscosity: 1.0
+    }).setView([-12.97, -38.51], 7);
+
+    // Mapa base
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap contributors & CartoDB',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    // Adiciona contorno da Bahia
+    fetch('bahia.geojson')
+      .then(res => res.json())
+      .then(data => {
+        const contorno = L.geoJSON(data, {
+          style: {
+            color: "#ff7800",
+            weight: 1,
+            opacity: 0.8,
+            fillColor: "#ffd580",
+            fillOpacity: 0.3
+          }
+        }).addTo(map);
+
+        map.fitBounds(contorno.getBounds());
+      });
+
+
+    // Ícones personalizados
+    const iconeSaude = L.icon({
+      iconUrl: 'saude.png',
+      iconSize: [40, 40],
+      iconAnchor: [20, 40],
+      popupAnchor: [0, -40]
+    });
+
+    const iconeRodovia = L.icon({
+      iconUrl: 'rodovia.png',
+      iconSize: [40, 40],
+      iconAnchor: [20, 40],
+      popupAnchor: [0, -40]
+    });
+
+    // Lista de obras
+    const obras = [
+      { nome: "Hospital Regional de Jacobina", cidade: "Jacobina", coords: [-11.1811, -40.5117], tipo: "Saúde" },
+      { nome: "Duplicação da BR-116", cidade: "Bahia", coords: [-12.5, -39.5], tipo: "Rodovia" }
+    ];
+
+    obras.forEach(obra => {
+      let icone;
+      switch (obra.tipo) {
+        case "Saúde":
+          icone = iconeSaude;
+          break;
+        case "Rodovia":
+          icone = iconeRodovia;
+          break;
+        default:
+          icone = undefined;
+      }
+
+      L.marker(obra.coords, { icon: icone })
+        .addTo(map)
+        .bindPopup(`<b>${obra.nome}</b><br>${obra.cidade}<br>Tipo: ${obra.tipo}`);
+    });
+
+    // Mostrar nomes dos municípios ao dar zoom
+    let municipioLabels = L.layerGroup();
+
+    fetch('br_ba.json') // arquivo com os municípios da Bahia
+      .then(res => res.json())
+      .then(data => {
+        data.features.forEach(feature => {
+          const nome = feature.properties.NM_MUN;
+          const bounds = L.geoJSON(feature).getBounds();
+          if (bounds && bounds.isValid()) {
+            const center = bounds.getCenter();
+            const label = L.marker(center, {
+              icon: L.divIcon({
+                className: 'municipio-label',
+                html: nome,
+                iconSize: null
+              })
+            });
+            municipioLabels.addLayer(label);
+          }
+        });
+
+        // Exibe rótulos dos municípios só com zoom >= 9
+        map.on('zoomend', () => {
+          if (map.getZoom() >= 9) {
+            municipioLabels.addTo(map);
+          } else {
+            map.removeLayer(municipioLabels);
+          }
+        });
+      });
+  </script>
+</body>
+</html>
